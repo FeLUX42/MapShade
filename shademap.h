@@ -30,5 +30,6 @@ typedef struct  {
 } bitmap_t;
 
 void sun_position(time_t unix_time, double *lat, double *lon);
+time_t now;
 
 #endif

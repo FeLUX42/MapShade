@@ -1,4 +1,4 @@
-	/*
+/*
  * Copyright (C) 2013 Felix Passenberg
  *
  * This program is free software; you can redistribute it and/or
@@ -35,6 +35,9 @@
  	(x) auto resize shade
  	(x) size for default marker
  	(x) size for default sun
+ Version 1.2:
+ 	(x) bugs (sun pos in winter, wrong pos when not using -v)
+ 	(x) specified time
  
  ToDo:
  	autofit maps
@@ -297,7 +300,7 @@ clock_map_render_shadow_pixbuf (bitmap_t *pixbuf)
         int x, y;
         int height, width;
         double sun_lat, sun_lon;
-        time_t now = time (NULL);
+      //  time_t now = time (NULL);
 
         width = pixbuf->width;
         height = pixbuf->height;
@@ -429,7 +432,6 @@ static int save_png_to_file (bitmap_t *bitmap, const char *path)
 
 int main (int argc, char *argv[])
 {
-  int now;
   //GTimeVal timeval;
   double lat, lon;
 
@@ -443,6 +445,7 @@ int main (int argc, char *argv[])
     shade.height = 360;
     int i = 0;
     int sun = 0;
+    int timevar = time(NULL);
     int keep = 0;
     int autoresize = 0;
     int verbose = 0;
@@ -468,23 +471,41 @@ int main (int argc, char *argv[])
 		    	printf(" -sf \tfilename of the sun marker\n");
 		    	printf(" -l \tcan be used more than once, add a location marker to <lat>,<lon>\n \t enter <lat> and <lon> as float; <lat> as N and <lon> as E\n \t use \"<lon>,<lat>\" for default marker\n \t use \"<lat>,<lon> <filename>\" for custom marker \n \t use\"<lat>,<lon> <size>\" for marker size \n");
 		    	printf(" -m \tdaylight map to use, filename\n");
-		    	printf(" -n \tnight map to us, filename\n");
+		    	printf(" -n \tnight map to use, filename\n");
 		    	printf(" -o \toutput file\n");
 		    	printf(" -k \tkeep automatically generated temporary files\n");
 		    	printf(" -r \tauto resize maps to given dimension\n");
+		    	printf(" -t \tset time for which the shade should be calculated\n");
 		    	printf(" -h \n --help\topen this help option\n");
 		    	return 0;
 		    }
 		    
 		if ( strcmp(argv[i], "-v") == 0) verbose ++;
 		
-		if (strcmp(argv[i], "-r") == 0) // display sunspot
+		if (strcmp(argv[i], "-t") == 0) // set time to calculate
+		{
+
+			if (i + 1 <= argc - 1)  /* There are enough arguments in argv. */
+			{
+				i++;
+				if(verbose)	printf("setting time from %i to", (int)timevar);
+				timevar = atoi(argv[i]);
+				if(verbose) printf(" %i.\n", (int)timevar);
+			}
+			else
+			{
+				printf("not enough arguments passed to %s \n", argv[i]);
+				return 1;
+			}
+		}
+		
+		if (strcmp(argv[i], "-r") == 0) // resize map automatically
 		{
 			if(verbose)	printf("resizing maps automatically\n");
 			autoresize = 1;
 		}
 		
-		if (strcmp(argv[i], "-s") == 0) // display sunspot
+		if (strcmp(argv[i], "-s") == 0) // display sunspot and optional size
 		{
 			if(verbose)	printf("also printing sunspot\n");
 			sun = 10;
@@ -497,7 +518,7 @@ int main (int argc, char *argv[])
 			}
 		}
 		
-		if (strcmp(argv[i], "-k") == 0) // display sunspot
+		if (strcmp(argv[i], "-k") == 0) // keep temp files
 		{
 			if(verbose) printf("keeping temporary files\n");
 			keep = 1;
@@ -657,7 +678,7 @@ int main (int argc, char *argv[])
 			autoresize = 1;
         }
 		
-        if (strcmp(argv[i], "-df") == 0)  // set dimensions
+        if (strcmp(argv[i], "-df") == 0)  // set dimensions force
         {
             if (i + 1 <= argc - 1)  /* There are enough arguments in argv. */
             {
@@ -721,10 +742,14 @@ int main (int argc, char *argv[])
     }    
     shade.pixels = calloc (sizeof (pixel_t), shade.width * shade.height); // allocate space for shade
     
+    now = timevar;
+   // printf("now %i\n",now);
+	sun_position (now, &lat, &lon);
+	if(lat > 90) {lat -= 360;}
+//	if(lat > 90) lat -= 180;
+//	if(lon > 180) lon -= 180;
     if(verbose) { // some infos about now
-    	now = time(NULL);
-		sun_position (now, &lat, &lon);
-		printf("current time :%d\nposition of the sun: %f°N %f°E\ncomputing shademap\n", now, lat, lon); 
+		printf("current time :%d\nposition of the sun: %f°N %f°E\ncomputing shademap\n", (int)now, lat, lon); 
     }
     
 	printf("computinge shade\n");
@@ -741,7 +766,7 @@ int main (int argc, char *argv[])
 		getsize( daymap, &twidth, &theight );	// get image width and height
 		if (verbose) printf("dimensions of the daymap: x=%i y=%i\n", twidth, theight);
 		if(twidth && theight) 	//--------------------------------- check if daymap has usable size
-			if (theight != shade.width || twidth != shade.height){	//-------if not already right size
+			if (theight != shade.height || twidth != shade.width){	//-------if not already right size
 				if (verbose) printf("resizing daymap\n");
 				char daycpy[255]; 
 				strcpy( daycpy, daymap);
@@ -804,7 +829,7 @@ int main (int argc, char *argv[])
 							sun, sun, (sun -1)/2., (sun -1)/2., (sun -1)/2.);
 			system(imagemagick);
 			
-			sprintf(imagemagick, "composite -compose Atop sun.png -geometry +%f+%f %s %s", sposx-5., sposy-5., output, output);
+			sprintf(imagemagick, "composite -compose Atop sun.png -geometry +%f+%f %s %s", sposx-sun/2., sposy-sun/2., output, output);
 			system(imagemagick);
 			if (!keep) system(" rm sun.png"); // deleting here is easier
 		}
